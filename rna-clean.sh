@@ -5,6 +5,17 @@
 #4   数据qc
 #5   使用sortmerna去除rrna
 
+if [ $# -lt 1 ]; then
+  echo "转录组前处理过程"
+  echo "#1   数据qc(后台)\
+#2   fastp过滤\
+#3   使用rcorrector软件对数据进行矫正\
+#4   数据qc\
+#5   使用sortmerna去除rrna"
+  echo "rna-clean_for_deg.sh fq1 fq2 threads"
+  exit 1
+fi
+
 threads=$3
 
 #1   数据qc(后台)
