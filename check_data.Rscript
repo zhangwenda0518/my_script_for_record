@@ -1,0 +1,143 @@
+# 清空环境变量并设置字符串为因子的选项
+rm(list = ls())
+options(stringsAsFactors = F)
+#忽略警告
+suppressWarnings({
+  warning("This warning will not be shown")
+})
+# 加载必要的库
+suppressMessages(library(FactoMineR))
+suppressMessages(library(factoextra))
+suppressMessages(library(tidyverse)) # 包含 ggplot2, stringr, readr, purrr, tibble, forcats
+suppressMessages(library(pheatmap))
+suppressMessages(library(DESeq2))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(data.table))
+
+# 获取命令行参数，如果没有提供参数，则使用默认文件名
+args <- commandArgs(trailingOnly = TRUE)
+counts_file <- ifelse(length(args) > 0, args[1], "featureCounts.counts")
+tpm_file <- ifelse(length(args) > 1, args[2], "featureCounts.tpm")
+samples_file <- ifelse(length(args) > 2, args[3], "samples.txt")
+
+# 参数说明
+if (length(args) == 0) {
+  cat("没有提供参数，使用默认文件名。\n")
+  cat("默认参数说明：\n")
+  cat("  第一个参数（counts_file）: 基因计数文件，默认为 'featureCounts.counts'\n")
+  cat("  第二个参数（tpm_file）: 基因TPM文件，默认为 'featureCounts.tpm'\n")
+  cat("  第三个参数（samples_file）: 样本信息文件，默认为 'samples.txt'\n")
+}
+
+# 载入数据并设置目录
+# 样本检查
+# 载入counts，第一列设置为列名
+a1 <- fread(counts_file, header = T, data.table = F)
+# 将基因名作为行名
+rownames(a1) <- a1$FEATURE_ID
+# 截取样本基因表达量的counts部分作为counts
+counts <- a1[, 2:ncol(a1)]
+
+# 载入tpm，第一列设置为列名
+a2 <- fread(tpm_file, header = T, data.table = F)
+# 将基因名作为行名
+rownames(a2) <- a2$FEATURE_ID
+tpms <- a2[, 2:ncol(a2)]
+
+# 导入或构建样本信息，进行列样品名的重命名和分组
+b <- read.table(samples_file)
+group_list <- b$V1
+# 构建样品名与分组对应的数据框
+gl <- data.frame(row.names = colnames(counts), group_list = group_list)
+
+# 过滤低表达
+keep_feature <- rowSums(counts > 1) >= 2
+# 查看筛选情况，FALSE为低表达基因数（行数），TRUE为要保留基因数
+counts_filt <- counts[keep_feature, ]
+# 替换counts为筛选后的基因矩阵（保留较高表达量的基因）
+tpm_filt <- tpms[keep_feature, ]
+
+# 保存数据
+counts_raw = counts
+# 这里重新命名方便后续分析调用
+counts = counts_filt
+tpm = tpm_filt
+print("##############读取数据完成###################")
+
+# 数据预处理
+dat <- log2(tpm + 1)
+
+# boxplot 查看样本的基因整体表达情况
+group_colors <- brewer.pal(n = length(unique(group_list)), name = "Set3") # 生成颜色分组
+color_mapped <- group_colors[as.numeric(factor(group_list))] # 映射颜色到分组
+
+pdf("check_boxplot.pdf")
+boxplot(dat, col = color_mapped, ylab = "dat", main = "normalized data", outline = FALSE, notch = FALSE)
+suppressMessages(dev.off())
+
+print("###################boxplot 查看样本的基因整体表达情况,OK！########################")
+# hclust and Heatmap of the sample-to-sample distances
+sampleDists <- dist(t(dat))   # dist默认计算矩阵行与行的距离，因此需要转置
+sampleDistMatrix <- as.matrix(sampleDists)
+colors <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)  # 选取热图的颜色
+p0 <- pheatmap::pheatmap(sampleDistMatrix,
+                        fontsize = 7,
+                        clustering_distance_rows = sampleDists,
+                        clustering_distance_cols = sampleDists,
+                        angle_col = 45,
+                        col = colors)
+ggsave(p0, filename = 'check_dist.pdf', width = 7.5, height = 6)
+
+pdf("check_hclust.pdf")
+plot(hclust(sampleDists))
+suppressMessages(dev.off())
+
+print("#################### 距离聚类完成, OK！####################")
+
+# PCA检测
+dat.pca <- PCA(t(dat), graph = F)
+eigenvalues <- dat.pca$eig   # 计算方差解释百分比
+percentVar <- dat.pca$eig[, "percentage of variance"]
+
+pca <- fviz_pca_ind(dat.pca,
+                    title = "Principal Component Analysis",
+                    legend.title = "Groups",
+                    geom.ind = c("point", "text"),
+                    pointsize = 1.5,
+                    labelsize = 4,
+                    col.ind = group_list, # 分组上色
+                    axes.linetype = NA,  # remove axes lines
+                    mean.point = F) +  # remove group center points
+  coord_fixed(ratio = 1) +  # 坐标轴的纵横比
+  xlab(paste0("PC1 (", round(percentVar[1], 1), "%)")) +
+  ylab(paste0("PC2 (", round(percentVar[2], 1), "%)"))
+
+ggsave(pca, filename = 'check_PCA.pdf', width = 7.5, height = 6)
+print("###############PCA, OK！#####################")
+
+# heatmap检测——取500差异大的基因
+cg <- names(tail(sort(apply(dat, 1, sd)), 500)) # 取每一行的方差，从小到大排序，取最大的500个
+n <- dat[cg, ]  # 选择这些基因的数据
+p1 <- pheatmap::pheatmap(n, show_colnames = T, show_rownames = F,
+                         fontsize = 7,
+                         legend_breaks = -3:3,
+                         # scale = "row",
+                         angle_col = 45,
+                         annotation_col = gl)
+
+ggsave(p1, filename = 'check_heatmap_top500_sd.pdf', width = 7.5, height = 6)
+print("###############heatmap检测——取500差异大的基因, OK！#####################")
+
+# 样本相关性检测——取500高表达基因
+dat_500 <- dat[names(sort(apply(dat, 1, mad), decreasing = T)[1:500]),] # 取高表达量前500基因
+M <- cor(dat_500)
+
+p2 <- pheatmap::pheatmap(M,
+                   show_rownames = T,
+                   angle_col = 45,
+                   fontsize = 7,
+                   annotation_col = gl)
+ggsave(p2, filename = 'check_cor_top500.pdf', width = 7.5, height = 6)
+print("###############样本相关性检测——检测——取500差异大的基因, OK！#####################")
+
+print("############ ALL DONE OK！#####################")
