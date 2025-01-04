@@ -25,9 +25,17 @@ python3 ~/biosoft/GFAP-linux/GFAP-linux2.py -go  -pfam -kegg -awd nr -cpu 20 -qp
 
 差异表达分析
 #上游数据检查：check_data.Rscript
+
+
 Rscript ~/bin/check_data.Rscript featureCounts.counts featureCounts.tpm samples.txt
 
-#下游富集分
+#下游富集分析
+
+
 Rscript ~/bin/gene_enrichment_analysis.R msc.higherThan.pc.DESeq2.xls msc.higherThan.pc
+
+
 Rscript ~/bin/gene_enrichment_analysis2.R sui.higherThan.pc sui.lowerThan.pc
+
+
 #两组的文件前缀，前一步
