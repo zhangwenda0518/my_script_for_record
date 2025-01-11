@@ -43,3 +43,6 @@ Rscript ~/bin/gene_enrichment_analysis2.R sui.higherThan.pc sui.lowerThan.pc
 
 
 Rscript ~/bin/gsea_kegg-analysis.R rnaseq.tsv.control_vs_mite.edgeR.DE_results control_vs_mite
+
+#基因家族分析
+python ~/bin/parse_pfam.py Pfam.tab2
