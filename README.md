@@ -46,4 +46,7 @@ Rscript ~/bin/gsea_kegg-analysis.R rnaseq.tsv.control_vs_mite.edgeR.DE_results c
 
 #基因家族分析
 python ~/bin/parse_pfam.py Pfam.tab2
+
 python ~/bin/pfam-filter.py PFAM_Domain1.tab PFAM_Domain2.tab pfam
+
+python ~/bin/run_pfam.py -i blast-result -o pfam-result --cpu 10 --hmm-db ~/database/pfam/Pfam-A.hmm
